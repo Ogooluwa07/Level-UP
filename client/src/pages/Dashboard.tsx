@@ -1,17 +1,21 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
-import { fetchHabits, createHabit, deleteHabit, checkInHabit, fetchStats } from '../lib/habits'
+import { fetchHabits, createHabit, updateHabit, deleteHabit, checkInHabit, fetchStats } from '../lib/habits'
+import type { Habit } from '../lib/habits'
+import { fetchLeaderboard } from '../lib/leaderboard'
 import HabitCard from '../components/HabitCard'
 import CreateHabitModal from '../components/CreateHabitModal'
 import XPBar from '../components/XPBar'
 import AchievementToast from '../components/AchievementToast'
 import StatsPanel from '../components/StatsPanel'
+import Leaderboard from '../components/Leaderboard'
 import ThemeToggle from '../components/ThemeToggle'
 
 export default function Dashboard() {
   const { user, logout, updateUser } = useAuth()
   const [showModal, setShowModal] = useState(false)
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null)
   const [newAchievements, setNewAchievements] = useState<any[]>([])
   const queryClient = useQueryClient()
 
@@ -25,11 +29,25 @@ export default function Dashboard() {
     queryFn: fetchStats,
   })
 
+  const { data: leaderboard } = useQuery({
+    queryKey: ['leaderboard'],
+    queryFn: fetchLeaderboard,
+  })
+
   const createMutation = useMutation({
     mutationFn: createHabit,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['habits'] })
       setShowModal(false)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateHabit>[1] }) =>
+      updateHabit(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['habits'] })
+      setEditingHabit(null)
     },
   })
 
@@ -45,12 +63,18 @@ export default function Dashboard() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['habits'] })
       queryClient.invalidateQueries({ queryKey: ['stats'] })
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
       updateUser(data.user)
       if (data.newAchievements?.length > 0) {
         setNewAchievements(data.newAchievements)
       }
     },
   })
+
+  function closeModal() {
+    setShowModal(false)
+    setEditingHabit(null)
+  }
 
   return (
     <div className="min-h-screen bg-parchment-50 dark:bg-ink-950 text-ink-900 dark:text-parchment-50 p-6 max-w-2xl mx-auto transition-colors">
@@ -74,6 +98,12 @@ export default function Dashboard() {
       </div>
 
       {stats && <StatsPanel stats={stats} />}
+
+      {leaderboard && (
+        <div className="mb-6 mt-6">
+          <Leaderboard topUsers={leaderboard.topUsers} currentUserEntry={leaderboard.currentUserEntry} />
+        </div>
+      )}
 
       <div className="flex justify-between items-center mb-4">
         <h2 className="font-display text-lg font-semibold">Your Habits</h2>
@@ -100,16 +130,19 @@ export default function Dashboard() {
             habit={habit}
             onCheckIn={(id) => checkInMutation.mutate(id)}
             onDelete={(id) => deleteMutation.mutate(id)}
+            onEdit={(habit) => setEditingHabit(habit)}
             checkingIn={checkInMutation.isPending}
           />
         ))}
       </div>
 
-      {showModal && (
+      {(showModal || editingHabit) && (
         <CreateHabitModal
-          onClose={() => setShowModal(false)}
+          onClose={closeModal}
           onCreate={(data) => createMutation.mutate(data)}
-          creating={createMutation.isPending}
+          onUpdate={(id, data) => updateMutation.mutate({ id, data })}
+          creating={createMutation.isPending || updateMutation.isPending}
+          habitToEdit={editingHabit}
         />
       )}
 

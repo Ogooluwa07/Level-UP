@@ -5,6 +5,7 @@ import authRoutes from './routes/auth.routes'
 import habitRoutes from './routes/habit.routes'
 import pushRoutes from './routes/push.routes'
 import notificationRoutes from './routes/notification.routes'
+import leaderboardRoutes from './routes/leaderboard.routes'
 
 const app = express()
 
@@ -23,6 +24,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/habits', habitRoutes)
 app.use('/api/push', pushRoutes)
 app.use('/api/notifications', notificationRoutes)
+app.use('/api/leaderboard', leaderboardRoutes)
 
 const PORT = process.env.PORT || 5000
 

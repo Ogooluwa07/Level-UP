@@ -55,6 +55,21 @@ function toLocalDateKey(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+// Helper: count how many times a habit has been checked in today (local time)
+async function getTodayCheckInCount(habitId: string): Promise<number> {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  return prisma.checkIn.count({
+    where: {
+      habitId,
+      date: { gte: today, lt: tomorrow },
+    },
+  })
+}
+
 // GET all habits for the logged-in user
 export async function getHabits(req: AuthRequest, res: Response) {
   try {
@@ -73,11 +88,15 @@ export async function getHabits(req: AuthRequest, res: Response) {
       },
     })
 
-    const habitsWithStatus = habits.map((habit) => ({
-      ...habit,
-      checkedInToday: habit.checkIns.length > 0,
-      checkIns: undefined,
-    }))
+    const habitsWithStatus = habits.map((habit) => {
+      const todayCount = habit.checkIns.length
+      return {
+        ...habit,
+        checkedInToday: todayCount >= habit.timesPerDay,
+        todayProgress: todayCount,
+        checkIns: undefined,
+      }
+    })
 
     res.json(habitsWithStatus)
   } catch (err) {
@@ -89,11 +108,17 @@ export async function getHabits(req: AuthRequest, res: Response) {
 // CREATE a new habit
 export async function createHabit(req: AuthRequest, res: Response) {
   try {
-    const { title, category, difficulty, frequency } = req.body
+    const { title, category, difficulty, frequency, timeOfDay, timesPerDay } = req.body
 
     if (!title || !category) {
       return res.status(400).json({ error: 'Title and category are required' })
     }
+
+    const validTimesPerDay = Number.isInteger(timesPerDay) && timesPerDay > 0 ? timesPerDay : 1
+
+    const validTimeOfDay = ['MORNING', 'AFTERNOON', 'EVENING', 'ANYTIME'].includes(timeOfDay)
+      ? timeOfDay
+      : 'ANYTIME'
 
     const xpMap: Record<string, number> = { EASY: 10, MEDIUM: 25, HARD: 50 }
     const xpReward = xpMap[difficulty] || 10
@@ -105,6 +130,8 @@ export async function createHabit(req: AuthRequest, res: Response) {
         difficulty: difficulty || 'EASY',
         frequency: frequency || 'DAILY',
         xpReward,
+        timeOfDay: validTimeOfDay,
+        timesPerDay: validTimesPerDay,
         userId: req.userId as string,
       },
     })
@@ -120,7 +147,7 @@ export async function createHabit(req: AuthRequest, res: Response) {
 export async function updateHabit(req: AuthRequest, res: Response) {
   try {
     const id = req.params.id as string
-    const { title, category, difficulty, frequency } = req.body
+    const { title, category, difficulty, frequency, timeOfDay, timesPerDay } = req.body
 
     const habit = await prisma.habit.findUnique({ where: { id } })
 
@@ -130,6 +157,18 @@ export async function updateHabit(req: AuthRequest, res: Response) {
 
     const xpMap: Record<string, number> = { EASY: 10, MEDIUM: 25, HARD: 50 }
 
+    const validTimesPerDay =
+      timesPerDay !== undefined
+        ? Number.isInteger(timesPerDay) && timesPerDay > 0
+          ? timesPerDay
+          : habit.timesPerDay
+        : habit.timesPerDay
+
+    const validTimeOfDay =
+      timeOfDay !== undefined && ['MORNING', 'AFTERNOON', 'EVENING', 'ANYTIME'].includes(timeOfDay)
+        ? timeOfDay
+        : habit.timeOfDay
+
     const updated = await prisma.habit.update({
       where: { id },
       data: {
@@ -138,6 +177,8 @@ export async function updateHabit(req: AuthRequest, res: Response) {
         difficulty: difficulty ?? habit.difficulty,
         frequency: frequency ?? habit.frequency,
         xpReward: difficulty ? xpMap[difficulty] : habit.xpReward,
+        timeOfDay: validTimeOfDay,
+        timesPerDay: validTimesPerDay,
       },
     })
 
@@ -168,7 +209,7 @@ export async function deleteHabit(req: AuthRequest, res: Response) {
   }
 }
 
-// CHECK IN a habit (mark as done today)
+// CHECK IN a habit (mark as done today — supports multiple times per day)
 export async function checkInHabit(req: AuthRequest, res: Response) {
   try {
     const id = req.params.id as string
@@ -179,47 +220,57 @@ export async function checkInHabit(req: AuthRequest, res: Response) {
       return res.status(404).json({ error: 'Habit not found' })
     }
 
-    // Prevent double check-in on the same day
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
 
-    const existingCheckIn = await prisma.checkIn.findFirst({
-      where: {
-        habitId: id,
-        date: { gte: today, lt: tomorrow },
-      },
-    })
+    const todayCheckInCount = await getTodayCheckInCount(id)
 
-    if (existingCheckIn) {
-      return res.status(409).json({ error: 'Already checked in today' })
+    if (todayCheckInCount >= habit.timesPerDay) {
+      return res.status(409).json({ error: 'Already fully checked in for today' })
     }
 
-    // Check if yesterday was checked in, to know if streak continues or resets
-    const yesterday = new Date(today)
-    yesterday.setDate(yesterday.getDate() - 1)
+    const isFinalCheckInOfDay = todayCheckInCount + 1 >= habit.timesPerDay
 
-    const yesterdayCheckIn = await prisma.checkIn.findFirst({
-      where: {
-        habitId: id,
-        date: { gte: yesterday, lt: today },
-      },
-    })
+    // Split XP across the required check-ins for the day; last one takes the
+    // remainder so the total always adds up to exactly xpReward.
+    const baseXp = Math.floor(habit.xpReward / habit.timesPerDay)
+    const xpForThisCheckIn = isFinalCheckInOfDay
+      ? habit.xpReward - baseXp * (habit.timesPerDay - 1)
+      : baseXp
 
-    const newStreak = yesterdayCheckIn ? habit.currentStreak + 1 : 1
-    const newLongestStreak = Math.max(newStreak, habit.longestStreak)
+    let newStreak = habit.currentStreak
+    let newLongestStreak = habit.longestStreak
+
+    // Streak only advances once the habit is FULLY done for the day
+    if (isFinalCheckInOfDay) {
+      const yesterday = new Date(today)
+      yesterday.setDate(yesterday.getDate() - 1)
+
+      const yesterdayCheckIn = await prisma.checkIn.findFirst({
+        where: {
+          habitId: id,
+          date: { gte: yesterday, lt: today },
+        },
+      })
+
+      newStreak = yesterdayCheckIn ? habit.currentStreak + 1 : 1
+      newLongestStreak = Math.max(newStreak, habit.longestStreak)
+    }
 
     // Create the check-in and update streak + user XP in one transaction
     const [checkIn, updatedHabit, updatedUser] = await prisma.$transaction([
       prisma.checkIn.create({ data: { habitId: id } }),
       prisma.habit.update({
         where: { id },
-        data: { currentStreak: newStreak, longestStreak: newLongestStreak },
+        data: isFinalCheckInOfDay
+          ? { currentStreak: newStreak, longestStreak: newLongestStreak }
+          : {},
       }),
       prisma.user.update({
         where: { id: req.userId },
-        data: { xp: { increment: habit.xpReward } },
+        data: { xp: { increment: xpForThisCheckIn } },
       }),
     ])
 
@@ -246,8 +297,11 @@ export async function checkInHabit(req: AuthRequest, res: Response) {
         level: finalUser.level,
         xp: finalUser.xp,
       },
-      leveledUp: newLevel > updatedUser.level - (newLevel !== updatedUser.level ? 1 : 0) && newLevel !== updatedUser.level,
+      leveledUp: newLevel !== updatedUser.level,
       newAchievements,
+      isFullyCompleted: isFinalCheckInOfDay,
+      todayProgress: todayCheckInCount + 1,
+      timesPerDay: habit.timesPerDay,
     })
   } catch (err) {
     console.error(err)
