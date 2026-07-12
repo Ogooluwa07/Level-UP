@@ -19,8 +19,9 @@ model User {
   coins        Int      @default(0)
   createdAt    DateTime @default(now())
 
-  habits       Habit[]
-  achievements UserAchievement[]
+  habits            Habit[]
+  achievements      UserAchievement[]
+  pushSubscriptions PushSubscription[]
 }
 
 model Habit {
@@ -70,6 +71,17 @@ model UserAchievement {
   achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
 
   @@unique([userId, achievementId])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 enum Difficulty {
