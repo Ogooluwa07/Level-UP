@@ -84,6 +84,16 @@ model PushSubscription {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
+model ReminderLog {
+  id            String   @id @default(uuid())
+  habitId       String
+  dateKey       String
+  offsetMinutes Int
+  sentAt        DateTime @default(now())
+
+  @@unique([habitId, dateKey, offsetMinutes])
+}
+
 enum Difficulty {
   EASY
   MEDIUM

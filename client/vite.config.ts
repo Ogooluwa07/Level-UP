@@ -7,10 +7,14 @@ export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
-      manifest: {
+   VitePWA({
+  registerType: 'autoUpdate',
+  strategies: 'injectManifest',
+  srcDir: 'src',
+  filename: 'sw.ts',
+  injectManifest: { swSrc: 'src/sw.ts' },
+  includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
+  manifest: {
         name: 'LevelUp — Gamified Habit Tracker',
         short_name: 'LevelUp',
         description: 'Turn your habits into an RPG adventure. Earn XP, level up, and unlock achievements.',

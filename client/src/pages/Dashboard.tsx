@@ -8,6 +8,7 @@ import XPBar from '../components/XPBar'
 import AchievementToast from '../components/AchievementToast'
 import StatsPanel from '../components/StatsPanel'
 import ThemeToggle from '../components/ThemeToggle'
+import type { Habit } from '../lib/habits'
 
 export default function Dashboard() {
   const { user, logout, updateUser } = useAuth()
