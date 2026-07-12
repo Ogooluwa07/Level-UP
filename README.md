@@ -2,10 +2,12 @@
 
 Turn your habits into an RPG adventure. Complete daily habits, earn XP, level up, build streaks, and unlock achievements — LevelUp makes building good habits feel like playing your favorite game.
 
-**Live demo:** _[add your deployed link here once live]_
+**Live demo:** [https://levelup-tracker-app.vercel.app](https://levelup-tracker-app.vercel.app)
+
+> ⚠️ The backend is hosted on Render's free tier, which spins down after inactivity. The **first** request after idle time can take ~50 seconds to wake up — subsequent requests are fast. If the app seems stuck on first load, give it a moment.
 
 ![LevelUp dashboard preview](./docs/screenshot-dashboard.png)
-_(add a screenshot here — see "Adding Screenshots" below)_
+
 
 ---
 
@@ -17,27 +19,31 @@ _(add a screenshot here — see "Adding Screenshots" below)_
 - 🔥 **Streaks** — daily check-ins build streaks, tracked per-habit with longest-streak history
 - 🏅 **Achievements** — 10 unlockable achievements based on streaks, XP milestones, and habit count
 - 📊 **Stats dashboard** — a 7-day check-in chart plus at-a-glance totals (check-ins, best streak, active habits)
-- 🌗 **Dark / light mode** — full theme support with persisted preference
+- 🌗 **Dark / light mode** — full theme support with a custom violet/gold design system and persisted preference
+- 🔔 **Push notifications** — opt-in streak reminders (3h / 1h / 30m / 15m / 5m before a streak resets), delivered via the Web Push API even when the app isn't open
 - 📱 **PWA** — installable on desktop and mobile, works like a native app
 
 ## Tech Stack
 
 **Frontend**
 - React 18 + TypeScript
-- Tailwind CSS v4
+- Tailwind CSS v4 (custom design tokens — no default theme)
 - TanStack Query (server state / caching)
 - React Router
 - Recharts (data visualization)
-- Vite + `vite-plugin-pwa`
+- Vite + `vite-plugin-pwa` with a custom service worker for push notifications
 
 **Backend**
 - Node.js + Express
 - PostgreSQL via Prisma ORM
 - JWT authentication + bcrypt
+- `web-push` (VAPID-based Web Push notifications)
 
 **Hosting**
-- Database: Supabase (Postgres)
-- _[Frontend/backend hosting — add once deployed]_
+- Database: [Supabase](https://supabase.com) (Postgres)
+- Backend: [Render](https://render.com)
+- Frontend: [Vercel](https://vercel.com)
+- Scheduled reminder checks triggered via an external cron ping to `/api/notifications/check`
 
 ## Architecture Notes
 
@@ -46,6 +52,7 @@ A few implementation details worth highlighting:
 - **Atomic XP transactions** — check-ins, streak updates, and XP awards happen inside a single Prisma `$transaction`, so a partial failure can't award XP without recording the check-in (or vice versa).
 - **Timezone-safe date handling** — daily stats and streak calculations use local calendar dates rather than UTC, avoiding the classic "logged a habit but it shows on the wrong day" bug around midnight.
 - **Ownership checks on every mutation** — habit updates/deletes verify the requesting user actually owns the habit before touching it, not just that the habit exists.
+- **Web Push over local notifications** — reminders are delivered via a server-stored push subscription + VAPID keys, not a client-side timer, so they still arrive if the tab or app is closed. A `ReminderLog` table prevents duplicate sends if the scheduler overlaps.
 
 ## Getting Started
 
@@ -67,11 +74,20 @@ A few implementation details worth highlighting:
    npm install
    ```
 
+   Generate VAPID keys for push notifications:
+   ```bash
+   npx web-push generate-vapid-keys
+   ```
+
    Create a `.env` file in `server/`:
    ```
    DATABASE_URL="your-postgres-connection-string"
    DIRECT_URL="your-postgres-direct-connection-string"
    JWT_SECRET="your-random-secret-string"
+   VAPID_PUBLIC_KEY="your-vapid-public-key"
+   VAPID_PRIVATE_KEY="your-vapid-private-key"
+   VAPID_SUBJECT="mailto:you@example.com"
+   CRON_SECRET="another-random-string"
    ```
 
    Push the schema and seed achievements:
@@ -90,6 +106,15 @@ A few implementation details worth highlighting:
    ```bash
    cd client
    npm install
+   ```
+
+   Create a `.env.local` file in `client/`:
+   ```
+   VITE_API_URL=http://localhost:5000/api
+   VITE_VAPID_PUBLIC_KEY="same-public-key-as-above"
+   ```
+
+   ```bash
    npm run dev
    ```
 
@@ -104,13 +129,14 @@ levelup-habit-tracker/
 │       ├── components/   # Reusable UI (HabitCard, XPBar, StatsPanel, etc.)
 │       ├── context/      # Auth + Theme global state
 │       ├── lib/          # API client + typed data-fetching functions
-│       └── pages/        # Landing, Auth, Dashboard
+│       ├── pages/        # Landing, Auth, Dashboard
+│       └── sw.ts         # Custom service worker (push notification handling)
 └── server/               # Express backend
     └── src/
-        ├── controllers/  # Route logic (auth, habits, achievements, stats)
-        ├── middleware/    # JWT auth guard
+        ├── controllers/  # Route logic (auth, habits, achievements, stats, push, notifications)
+        ├── middleware/   # JWT auth guard
         ├── routes/       # Express route definitions
-        └── lib/          # Prisma client singleton
+        └── lib/          # Prisma client + web-push singletons
 ```
 
 ## Roadmap
