@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Plus Jakarta Sans", sans-serif;
+  --font-stat: "JetBrains Mono", monospace;
+
+  --color-ink-950: #0b0a17;
+  --color-ink-900: #14122a;
+  --color-ink-800: #1d1a3a;
+  --color-ink-700: #29244f;
+
+  --color-parchment-50: #f7f2e7;
+  --color-parchment-100: #efe6d2;
+  --color-parchment-200: #e2d4b8;
+
+  --color-violet-400: #9b82ff;
+  --color-violet-500: #7c5cfc;
+  --color-violet-600: #5b3de0;
+
+  --color-gold-300: #f5c168;
+  --color-gold-400: #f0a83a;
+  --color-gold-500: #d68e22;
+
+  --color-crimson-400: #ee6b84;
+  --color-crimson-500: #e23d5c;
+
+  --color-teal-300: #7fdedb;
+  --color-teal-400: #33c7c0;
+  --color-teal-500: #1fa8a1;
+}
+
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+.font-stat {
+  font-family: var(--font-stat);
+  font-feature-settings: "tnum";
+}
+

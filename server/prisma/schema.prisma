@@ -1,0 +1,85 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  avatar       String?
+  xp           Int      @default(0)
+  level        Int      @default(1)
+  coins        Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  habits       Habit[]
+  achievements UserAchievement[]
+}
+
+model Habit {
+  id         String     @id @default(uuid())
+  title      String
+  category   String
+  difficulty Difficulty @default(EASY)
+  frequency  Frequency  @default(DAILY)
+  xpReward   Int        @default(10)
+  currentStreak Int     @default(0)
+  longestStreak Int     @default(0)
+  createdAt  DateTime   @default(now())
+
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  checkIns   CheckIn[]
+}
+
+model CheckIn {
+  id        String   @id @default(uuid())
+  date      DateTime @default(now())
+
+  habitId   String
+  habit     Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+}
+
+model Achievement {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String
+  icon        String
+
+  users       UserAchievement[]
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  unlockedAt    DateTime    @default(now())
+
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
