@@ -8,7 +8,11 @@ import notificationRoutes from './routes/notification.routes'
 
 const app = express()
 
-app.use(cors())
+const allowedOrigins = process.env.CLIENT_URL
+  ? [process.env.CLIENT_URL]
+  : true // allow all in dev if not set
+
+app.use(cors({ origin: allowedOrigins }))
 app.use(express.json())
 
 app.get('/', (_req, res) => {
@@ -19,8 +23,9 @@ app.use('/api/auth', authRoutes)
 app.use('/api/habits', habitRoutes)
 app.use('/api/push', pushRoutes)
 app.use('/api/notifications', notificationRoutes)
+
 const PORT = process.env.PORT || 5000
 
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`)
+app.listen(Number(PORT), '0.0.0.0', () => {
+  console.log(`Server running on port ${PORT}`)
 })
