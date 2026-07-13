@@ -1,6 +1,9 @@
 import { Response } from 'express'
 import prisma from '../lib/prisma'
 import { AuthRequest } from '../middleware/auth.middleware'
+import { XP_MAP } from '../lib/constants'
+import { createHabitSchema, updateHabitSchema } from '../lib/schemas'
+import { calculateXpForCheckIn, calculateNewStreak, calculateLevel } from '../lib/habitLogic'
 
 async function checkAndAwardAchievements(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId } })
@@ -108,30 +111,24 @@ export async function getHabits(req: AuthRequest, res: Response) {
 // CREATE a new habit
 export async function createHabit(req: AuthRequest, res: Response) {
   try {
-    const { title, category, difficulty, frequency, timeOfDay, timesPerDay } = req.body
+    const parsed = createHabitSchema.safeParse(req.body)
 
-    if (!title || !category) {
-      return res.status(400).json({ error: 'Title and category are required' })
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0].message })
     }
 
-    const validTimesPerDay = Number.isInteger(timesPerDay) && timesPerDay > 0 ? timesPerDay : 1
-
-    const validTimeOfDay = ['MORNING', 'AFTERNOON', 'EVENING', 'ANYTIME'].includes(timeOfDay)
-      ? timeOfDay
-      : 'ANYTIME'
-
-    const xpMap: Record<string, number> = { EASY: 10, MEDIUM: 25, HARD: 50 }
-    const xpReward = xpMap[difficulty] || 10
+    const { title, category, difficulty, frequency, timeOfDay, timesPerDay } = parsed.data
+    const xpReward = XP_MAP[difficulty] || 10
 
     const habit = await prisma.habit.create({
       data: {
         title,
         category,
-        difficulty: difficulty || 'EASY',
-        frequency: frequency || 'DAILY',
+        difficulty,
+        frequency,
         xpReward,
-        timeOfDay: validTimeOfDay,
-        timesPerDay: validTimesPerDay,
+        timeOfDay,
+        timesPerDay,
         userId: req.userId as string,
       },
     })
@@ -147,27 +144,19 @@ export async function createHabit(req: AuthRequest, res: Response) {
 export async function updateHabit(req: AuthRequest, res: Response) {
   try {
     const id = req.params.id as string
-    const { title, category, difficulty, frequency, timeOfDay, timesPerDay } = req.body
+    const parsed = updateHabitSchema.safeParse(req.body)
+
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0].message })
+    }
+
+    const { title, category, difficulty, frequency, timeOfDay, timesPerDay } = parsed.data
 
     const habit = await prisma.habit.findUnique({ where: { id } })
 
     if (!habit || habit.userId !== req.userId) {
       return res.status(404).json({ error: 'Habit not found' })
     }
-
-    const xpMap: Record<string, number> = { EASY: 10, MEDIUM: 25, HARD: 50 }
-
-    const validTimesPerDay =
-      timesPerDay !== undefined
-        ? Number.isInteger(timesPerDay) && timesPerDay > 0
-          ? timesPerDay
-          : habit.timesPerDay
-        : habit.timesPerDay
-
-    const validTimeOfDay =
-      timeOfDay !== undefined && ['MORNING', 'AFTERNOON', 'EVENING', 'ANYTIME'].includes(timeOfDay)
-        ? timeOfDay
-        : habit.timeOfDay
 
     const updated = await prisma.habit.update({
       where: { id },
@@ -176,9 +165,9 @@ export async function updateHabit(req: AuthRequest, res: Response) {
         category: category ?? habit.category,
         difficulty: difficulty ?? habit.difficulty,
         frequency: frequency ?? habit.frequency,
-        xpReward: difficulty ? xpMap[difficulty] : habit.xpReward,
-        timeOfDay: validTimeOfDay,
-        timesPerDay: validTimesPerDay,
+        xpReward: difficulty ? XP_MAP[difficulty] : habit.xpReward,
+        timeOfDay: timeOfDay ?? habit.timeOfDay,
+        timesPerDay: timesPerDay ?? habit.timesPerDay,
       },
     })
 
@@ -233,12 +222,7 @@ export async function checkInHabit(req: AuthRequest, res: Response) {
 
     const isFinalCheckInOfDay = todayCheckInCount + 1 >= habit.timesPerDay
 
-    // Split XP across the required check-ins for the day; last one takes the
-    // remainder so the total always adds up to exactly xpReward.
-    const baseXp = Math.floor(habit.xpReward / habit.timesPerDay)
-    const xpForThisCheckIn = isFinalCheckInOfDay
-      ? habit.xpReward - baseXp * (habit.timesPerDay - 1)
-      : baseXp
+    const xpForThisCheckIn = calculateXpForCheckIn(habit.xpReward, habit.timesPerDay, isFinalCheckInOfDay)
 
     let newStreak = habit.currentStreak
     let newLongestStreak = habit.longestStreak
@@ -255,7 +239,7 @@ export async function checkInHabit(req: AuthRequest, res: Response) {
         },
       })
 
-      newStreak = yesterdayCheckIn ? habit.currentStreak + 1 : 1
+      newStreak = calculateNewStreak(habit.currentStreak, !!yesterdayCheckIn)
       newLongestStreak = Math.max(newStreak, habit.longestStreak)
     }
 
@@ -274,8 +258,7 @@ export async function checkInHabit(req: AuthRequest, res: Response) {
       }),
     ])
 
-    // Calculate level from total XP (every 100 XP = 1 level, simple formula for now)
-    const newLevel = Math.floor(updatedUser.xp / 100) + 1
+    const newLevel = calculateLevel(updatedUser.xp)
     let finalUser = updatedUser
 
     if (newLevel !== updatedUser.level) {

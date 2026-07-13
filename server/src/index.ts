@@ -1,11 +1,14 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import { validateEnv } from './lib/validateEnv'
 import authRoutes from './routes/auth.routes'
 import habitRoutes from './routes/habit.routes'
 import pushRoutes from './routes/push.routes'
 import notificationRoutes from './routes/notification.routes'
 import leaderboardRoutes from './routes/leaderboard.routes'
+
+validateEnv()
 
 const app = express()
 

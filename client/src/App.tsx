@@ -3,6 +3,7 @@ import { useAuth } from './context/AuthContext'
 import LandingPage from './pages/LandingPage'
 import AuthPage from './pages/AuthPage'
 import Dashboard from './pages/Dashboard'
+import LeaderboardPage from './pages/LeaderboardPage'
 
 function App() {
   const { user } = useAuth()
@@ -17,6 +18,10 @@ function App() {
       <Route
         path="/dashboard"
         element={user ? <Dashboard /> : <Navigate to="/auth" />}
+      />
+      <Route
+        path="/leaderboard"
+        element={user ? <LeaderboardPage /> : <Navigate to="/auth" />}
       />
     </Routes>
   )

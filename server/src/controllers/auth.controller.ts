@@ -2,16 +2,19 @@ import { Request, Response } from 'express'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import prisma from '../lib/prisma'
+import { registerSchema, loginSchema } from '../lib/schemas'
 
 const JWT_SECRET = process.env.JWT_SECRET as string
 
 export async function register(req: Request, res: Response) {
   try {
-    const { email, username, password } = req.body
+    const parsed = registerSchema.safeParse(req.body)
 
-    if (!email || !username || !password) {
-      return res.status(400).json({ error: 'Email, username, and password are required' })
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0].message })
     }
+
+    const { email, username, password } = parsed.data
 
     const existingUser = await prisma.user.findFirst({
       where: { OR: [{ email }, { username }] },
@@ -41,11 +44,13 @@ export async function register(req: Request, res: Response) {
 
 export async function login(req: Request, res: Response) {
   try {
-    const { email, password } = req.body
+    const parsed = loginSchema.safeParse(req.body)
 
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email and password are required' })
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0].message })
     }
+
+    const { email, password } = parsed.data
 
     const user = await prisma.user.findUnique({ where: { email } })
 

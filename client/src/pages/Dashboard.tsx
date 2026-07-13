@@ -1,75 +1,25 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../context/AuthContext'
-import { fetchHabits, createHabit, updateHabit, deleteHabit, checkInHabit, fetchStats } from '../lib/habits'
+import { useHabits } from '../hooks/useHabits'
+import { useCheckIn } from '../hooks/useCheckIn'
+import { useDashboardData } from '../hooks/useDashboardData'
 import type { Habit } from '../lib/habits'
-import { fetchLeaderboard } from '../lib/leaderboard'
 import HabitCard from '../components/HabitCard'
 import CreateHabitModal from '../components/CreateHabitModal'
 import XPBar from '../components/XPBar'
 import AchievementToast from '../components/AchievementToast'
 import StatsPanel from '../components/StatsPanel'
-import Leaderboard from '../components/Leaderboard'
+import LeaderboardTeaser from '../components/LeaderboardTeaser'
 import ThemeToggle from '../components/ThemeToggle'
 
 export default function Dashboard() {
-  const { user, logout, updateUser } = useAuth()
+  const { user, logout } = useAuth()
   const [showModal, setShowModal] = useState(false)
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null)
-  const [newAchievements, setNewAchievements] = useState<any[]>([])
-  const queryClient = useQueryClient()
 
-  const { data: habits, isLoading } = useQuery({
-    queryKey: ['habits'],
-    queryFn: fetchHabits,
-  })
-
-  const { data: stats } = useQuery({
-    queryKey: ['stats'],
-    queryFn: fetchStats,
-  })
-
-  const { data: leaderboard } = useQuery({
-    queryKey: ['leaderboard'],
-    queryFn: fetchLeaderboard,
-  })
-
-  const createMutation = useMutation({
-    mutationFn: createHabit,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['habits'] })
-      setShowModal(false)
-    },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Parameters<typeof updateHabit>[1] }) =>
-      updateHabit(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['habits'] })
-      setEditingHabit(null)
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteHabit,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['habits'] })
-    },
-  })
-
-  const checkInMutation = useMutation({
-    mutationFn: checkInHabit,
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['habits'] })
-      queryClient.invalidateQueries({ queryKey: ['stats'] })
-      queryClient.invalidateQueries({ queryKey: ['leaderboard'] })
-      updateUser(data.user)
-      if (data.newAchievements?.length > 0) {
-        setNewAchievements(data.newAchievements)
-      }
-    },
-  })
+  const { habits, isLoading, createMutation, updateMutation, deleteMutation } = useHabits()
+  const { checkInMutation, newAchievements, clearAchievements } = useCheckIn()
+  const { stats, leaderboard } = useDashboardData()
 
   function closeModal() {
     setShowModal(false)
@@ -101,7 +51,7 @@ export default function Dashboard() {
 
       {leaderboard && (
         <div className="mb-6 mt-6">
-          <Leaderboard topUsers={leaderboard.topUsers} currentUserEntry={leaderboard.currentUserEntry} />
+          <LeaderboardTeaser leaderboard={leaderboard} />
         </div>
       )}
 
@@ -139,14 +89,14 @@ export default function Dashboard() {
       {(showModal || editingHabit) && (
         <CreateHabitModal
           onClose={closeModal}
-          onCreate={(data) => createMutation.mutate(data)}
-          onUpdate={(id, data) => updateMutation.mutate({ id, data })}
+          onCreate={(data) => createMutation.mutate(data, { onSuccess: closeModal })}
+          onUpdate={(id, data) => updateMutation.mutate({ id, data }, { onSuccess: closeModal })}
           creating={createMutation.isPending || updateMutation.isPending}
           habitToEdit={editingHabit}
         />
       )}
 
-      <AchievementToast achievements={newAchievements} onDismiss={() => setNewAchievements([])} />
+      <AchievementToast achievements={newAchievements} onDismiss={clearAchievements} />
     </div>
   )
 }
