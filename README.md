@@ -6,8 +6,19 @@ Turn your habits into an RPG adventure. Complete daily habits, earn XP, level up
 
 > ⚠️ The backend is hosted on Render's free tier, which spins down after inactivity. The **first** request after idle time can take ~50 seconds to wake up — subsequent requests are fast. If the app seems stuck on first load, give it a moment.
 
-![LevelUp dashboard preview](./docs/screenshot-dashboard.png)
+![LevelUp dashboard preview](./docs/screenshots/dashboard-light.png)
 
+---
+
+## Screenshots
+
+| Landing Page | Dashboard (Light) | Dashboard (Dark) |
+|---|---|---|
+| ![Landing page](./docs/screenshots/landing.png) | ![Dashboard light mode](./docs/screenshots/dashboard-light.png) | ![Dashboard dark mode](./docs/screenshots/dashboard-dark.png) |
+
+| Create/Edit Habit | Leaderboard |
+|---|---|
+| ![Create habit modal](./docs/screenshots/create-habit-modal.png) | ![Leaderboard page](./docs/screenshots/leaderboard.png) |
 
 ---
 
