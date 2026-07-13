@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchHabits, createHabit, updateHabit, deleteHabit, checkInHabit } from '../lib/habits'
-import type { Habit } from '../lib/habits'
+import { fetchHabits, createHabit, updateHabit, deleteHabit } from '../lib/habits'
+
 
 export function useHabits() {
   const queryClient = useQueryClient()
