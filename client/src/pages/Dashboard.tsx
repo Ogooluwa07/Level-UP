@@ -11,6 +11,7 @@ import AchievementToast from '../components/AchievementToast'
 import StatsPanel from '../components/StatsPanel'
 import LeaderboardTeaser from '../components/LeaderboardTeaser'
 import ThemeToggle from '../components/ThemeToggle'
+import NotificationSettings from '../components/NotificationSettings'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -33,6 +34,7 @@ export default function Dashboard() {
           Hey, <span className="text-violet-500 dark:text-violet-400">{user?.username}</span> 🎮
         </h1>
         <div className="flex items-center gap-3">
+          <NotificationSettings />
           <ThemeToggle />
           <button
             onClick={logout}
